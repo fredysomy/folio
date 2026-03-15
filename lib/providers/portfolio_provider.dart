@@ -10,6 +10,7 @@ import '../services/stock_excel_service.dart';
 class PortfolioProvider with ChangeNotifier {
   List<Holding> _holdings = [];
   List<StockHolding> _stockHoldings = [];
+  Map<String, dynamic>? _lastNetWorthRecord;
   bool _isLoading = false;
 
   final DatabaseService _dbService = DatabaseService();
@@ -20,6 +21,7 @@ class PortfolioProvider with ChangeNotifier {
 
   List<Holding> get holdings => _holdings;
   List<StockHolding> get stockHoldings => _stockHoldings;
+  Map<String, dynamic>? get lastNetWorthRecord => _lastNetWorthRecord;
   bool get isLoading => _isLoading;
 
   double get mfInvested => _holdings.fold(0, (s, h) => s + h.investedValue);
@@ -35,6 +37,13 @@ class PortfolioProvider with ChangeNotifier {
   double get totalProfitLossPercentage =>
       totalInvested == 0 ? 0 : (totalProfitLoss / totalInvested) * 100;
 
+  double get dayChange => _lastNetWorthRecord?['dayChange'] ?? 0.0;
+  double get dayChangePercentage {
+    if (_lastNetWorthRecord == null) return 0.0;
+    double prev = _lastNetWorthRecord!['totalValue'] - _lastNetWorthRecord!['dayChange'];
+    return prev == 0 ? 0.0 : (dayChange / prev) * 100;
+  }
+
   PortfolioProvider() {
     loadAll();
   }
@@ -44,6 +53,7 @@ class PortfolioProvider with ChangeNotifier {
     notifyListeners();
     _holdings = await _dbService.getHoldings();
     _stockHoldings = await _dbService.getStockHoldings();
+    _lastNetWorthRecord = await _dbService.getLastNetWorthRecord();
     _isLoading = false;
     notifyListeners();
   }

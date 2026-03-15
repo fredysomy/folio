@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 import '../providers/portfolio_provider.dart';
 import '../models/holding.dart';
 import '../models/stock_holding.dart';
+import '../services/background_service.dart';
+import '../services/battery_optimization_service.dart';
 import '../services/stock_api_service.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -74,7 +76,7 @@ class HomeTab extends StatelessWidget {
 
         return Scaffold(
           appBar: AppBar(
-            title: const Text('NetWorth Tracker'),
+            title: const Text('Folio'),
             actions: [
               if (provider.isLoading)
                 const Padding(
@@ -157,6 +159,80 @@ class HomeTab extends StatelessWidget {
                       ),
                       const SizedBox(height: 12),
 
+                      // ── Day Movement Card ──────────────────────────────
+                      if (provider.lastNetWorthRecord != null)
+                        Card(
+                          elevation: 0,
+                          color: colorScheme.secondaryContainer.withOpacity(
+                            0.5,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: BorderSide(
+                              color: colorScheme.outlineVariant.withOpacity(
+                                0.3,
+                              ),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 20,
+                              vertical: 16,
+                            ),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        (provider.dayChange >= 0
+                                                ? Colors.green
+                                                : Colors.red)
+                                            .withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    provider.dayChange >= 0
+                                        ? Icons.trending_up
+                                        : Icons.trending_down,
+                                    color: provider.dayChange >= 0
+                                        ? Colors.green.shade400
+                                        : Colors.red.shade400,
+                                    size: 20,
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Day Movement (as of ${DateFormat('dd MMM, hh:mm a').format(DateTime.parse(provider.lastNetWorthRecord!['date']))})',
+                                      style: TextStyle(
+                                        color: colorScheme.onSecondaryContainer
+                                            .withOpacity(0.7),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${provider.dayChange >= 0 ? '+' : ''}${fmt.format(provider.dayChange)} (${provider.dayChangePercentage.toStringAsFixed(2)}%)',
+                                      style: TextStyle(
+                                        color: provider.dayChange >= 0
+                                            ? Colors.green.shade400
+                                            : Colors.red.shade400,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+
+                      const SizedBox(height: 12),
+
                       // ── Total Invested vs Current ─────────────────────────
                       Row(
                         children: [
@@ -219,9 +295,11 @@ class HomeTab extends StatelessWidget {
                             .take(3)
                             .map((s) => _StockTile(stock: s)),
                       ],
-                      if (provider.holdings.isEmpty && provider.stockHoldings.isEmpty)
+                      if (provider.holdings.isEmpty &&
+                          provider.stockHoldings.isEmpty)
                         const _EmptyState(
-                          message: 'No holdings yet.\nImport an Excel file to get started.',
+                          message:
+                              'No holdings yet.\nImport an Excel file to get started.',
                         ),
                     ],
                   ),
@@ -263,93 +341,112 @@ class MutualFundsTab extends StatelessWidget {
           body: provider.isLoading
               ? const Center(child: CircularProgressIndicator())
               : provider.holdings.isEmpty
-                  ? const _EmptyState(
-                      message:
-                          'No mutual fund holdings.\nGo to Import tab to add data.',
-                    )
-                  : Column(
-                      children: [
-                        // Summary bar
-                        Container(
-                          margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .secondaryContainer,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              ? const _EmptyState(
+                  message:
+                      'No mutual fund holdings.\nGo to Import tab to add data.',
+                )
+              : Column(
+                  children: [
+                    // Summary bar
+                    Container(
+                      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Invested',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSecondaryContainer
-                                              .withOpacity(0.7))),
-                                  Text(fmt.format(provider.mfInvested),
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                ],
+                              Text(
+                                'Invested',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSecondaryContainer
+                                      .withOpacity(0.7),
+                                ),
                               ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text('Current Value',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSecondaryContainer
-                                              .withOpacity(0.7))),
-                                  Text(fmt.format(provider.mfCurrentValue),
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text('P&L',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSecondaryContainer
-                                              .withOpacity(0.7))),
-                                  Builder(builder: (ctx) {
-                                    final pnl = provider.mfCurrentValue - provider.mfInvested;
-                                    return Text(
-                                      '${pnl >= 0 ? '+' : ''}${fmt.format(pnl)}',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: pnl >= 0
-                                            ? Colors.green.shade400
-                                            : Colors.red.shade400,
-                                      ),
-                                    );
-                                  }),
-                                ],
+                              Text(
+                                fmt.format(provider.mfInvested),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ],
                           ),
-                        ),
-                        Expanded(
-                          child: ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                            itemCount: provider.holdings.length,
-                            itemBuilder: (context, i) =>
-                                _HoldingTile(holding: provider.holdings[i]),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                'Current Value',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSecondaryContainer
+                                      .withOpacity(0.7),
+                                ),
+                              ),
+                              Text(
+                                fmt.format(provider.mfCurrentValue),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                'P&L',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSecondaryContainer
+                                      .withOpacity(0.7),
+                                ),
+                              ),
+                              Builder(
+                                builder: (ctx) {
+                                  final pnl =
+                                      provider.mfCurrentValue -
+                                      provider.mfInvested;
+                                  return Text(
+                                    '${pnl >= 0 ? '+' : ''}${fmt.format(pnl)}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: pnl >= 0
+                                          ? Colors.green.shade400
+                                          : Colors.red.shade400,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        itemCount: provider.holdings.length,
+                        itemBuilder: (context, i) =>
+                            _HoldingTile(holding: provider.holdings[i]),
+                      ),
+                    ),
+                  ],
+                ),
         );
       },
     );
@@ -379,8 +476,7 @@ class StocksTab extends StatelessWidget {
                 IconButton(
                   icon: const Icon(Icons.refresh),
                   tooltip: 'Force refresh all prices',
-                  onPressed: () =>
-                      provider.syncStockPrices(forceRefresh: true),
+                  onPressed: () => provider.syncStockPrices(forceRefresh: true),
                 ),
               ],
             ],
@@ -388,94 +484,111 @@ class StocksTab extends StatelessWidget {
           body: provider.isLoading
               ? const Center(child: CircularProgressIndicator())
               : provider.stockHoldings.isEmpty
-                  ? const _EmptyState(
-                      icon: Icons.candlestick_chart_outlined,
-                      message:
-                          'No stock holdings.\nGo to Import tab to add data.',
-                    )
-                  : Column(
-                      children: [
-                        Container(
-                          margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context)
-                                .colorScheme
-                                .secondaryContainer,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              ? const _EmptyState(
+                  icon: Icons.candlestick_chart_outlined,
+                  message: 'No stock holdings.\nGo to Import tab to add data.',
+                )
+              : Column(
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Invested',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSecondaryContainer
-                                              .withOpacity(0.7))),
-                                  Text(fmt.format(provider.stockInvested),
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                ],
+                              Text(
+                                'Invested',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSecondaryContainer
+                                      .withOpacity(0.7),
+                                ),
                               ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text('Current Value',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSecondaryContainer
-                                              .withOpacity(0.7))),
-                                  Text(fmt.format(provider.stockCurrentValue),
-                                      style: const TextStyle(
-                                          fontWeight: FontWeight.bold)),
-                                ],
-                              ),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text('P&L',
-                                      style: TextStyle(
-                                          fontSize: 12,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSecondaryContainer
-                                              .withOpacity(0.7))),
-                                  Builder(builder: (ctx) {
-                                    final pnl = provider.stockCurrentValue -
-                                        provider.stockInvested;
-                                    return Text(
-                                      '${pnl >= 0 ? '+' : ''}${fmt.format(pnl)}',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: pnl >= 0
-                                            ? Colors.green.shade400
-                                            : Colors.red.shade400,
-                                      ),
-                                    );
-                                  }),
-                                ],
+                              Text(
+                                fmt.format(provider.stockInvested),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ],
                           ),
-                        ),
-                        Expanded(
-                          child: ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                            itemCount: provider.stockHoldings.length,
-                            itemBuilder: (context, i) =>
-                                _StockTile(stock: provider.stockHoldings[i]),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                'Current Value',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSecondaryContainer
+                                      .withOpacity(0.7),
+                                ),
+                              ),
+                              Text(
+                                fmt.format(provider.stockCurrentValue),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
-                        ),
-                      ],
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                'P&L',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSecondaryContainer
+                                      .withOpacity(0.7),
+                                ),
+                              ),
+                              Builder(
+                                builder: (ctx) {
+                                  final pnl =
+                                      provider.stockCurrentValue -
+                                      provider.stockInvested;
+                                  return Text(
+                                    '${pnl >= 0 ? '+' : ''}${fmt.format(pnl)}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: pnl >= 0
+                                          ? Colors.green.shade400
+                                          : Colors.red.shade400,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
+                    Expanded(
+                      child: ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        itemCount: provider.stockHoldings.length,
+                        itemBuilder: (context, i) =>
+                            _StockTile(stock: provider.stockHoldings[i]),
+                      ),
+                    ),
+                  ],
+                ),
         );
       },
     );
@@ -496,11 +609,19 @@ class _ImportTabState extends State<ImportTab> {
   bool _newKeyObscured = true;
   List<String> _apiKeys = [];
   final _stockApiService = StockApiService();
+  final _batteryService = BatteryOptimizationService();
+  TimeOfDay? _reminderTime;
+  bool _reminderLoading = false;
+  bool? _batteryOptDisabled;
+  bool _batteryLoading = false;
+  bool _testSummaryRunning = false;
 
   @override
   void initState() {
     super.initState();
     _loadApiKeys();
+    _loadReminderTime();
+    _checkBatteryOptimization();
   }
 
   Future<void> _loadApiKeys() async {
@@ -516,7 +637,10 @@ class _ImportTabState extends State<ImportTab> {
     await _loadApiKeys();
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('API key added'), behavior: SnackBarBehavior.floating),
+        const SnackBar(
+          content: Text('API key added'),
+          behavior: SnackBarBehavior.floating,
+        ),
       );
     }
   }
@@ -524,6 +648,89 @@ class _ImportTabState extends State<ImportTab> {
   Future<void> _removeKey(String key) async {
     await _stockApiService.removeApiKey(key);
     await _loadApiKeys();
+  }
+
+  Future<void> _checkBatteryOptimization() async {
+    final status = await _batteryService.isIgnoringOptimizations();
+    if (mounted) setState(() => _batteryOptDisabled = status);
+  }
+
+  Future<void> _requestBatteryOptimization() async {
+    setState(() => _batteryLoading = true);
+    await _batteryService.requestIgnoreOptimizations();
+    await Future.delayed(const Duration(milliseconds: 600));
+    await _checkBatteryOptimization();
+    if (mounted) {
+      setState(() => _batteryLoading = false);
+      if (_batteryOptDisabled == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Battery optimisation disabled for Folio'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _loadReminderTime() async {
+    final time = await BackgroundService().getScheduledTime();
+    if (mounted) setState(() => _reminderTime = time);
+  }
+
+  Future<void> _pickReminderTime() async {
+    final initial = _reminderTime ?? const TimeOfDay(hour: 21, minute: 0);
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: initial,
+      helpText: 'Choose reminder time',
+    );
+    if (picked != null) {
+      setState(() => _reminderLoading = true);
+      try {
+        await BackgroundService().updateSchedule(picked);
+        if (!mounted) return;
+        setState(() => _reminderTime = picked);
+        final formatted = picked.format(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Daily summary set for $formatted'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } finally {
+        if (mounted) {
+          setState(() => _reminderLoading = false);
+        }
+      }
+    }
+  }
+
+  Future<void> _sendSummaryNow() async {
+    setState(() => _testSummaryRunning = true);
+    try {
+      await BackgroundService().runSummaryNow();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Triggered a portfolio summary notification'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Failed to trigger summary. Check permissions and holdings.',
+            ),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _testSummaryRunning = false);
+    }
   }
 
   String _obscureKey(String key) {
@@ -615,65 +822,78 @@ class _ImportTabState extends State<ImportTab> {
                           Icon(Icons.key_outlined, color: colorScheme.primary),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Text('Stock API Keys',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold)),
+                            child: Text(
+                              'Stock API Keys',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
                           ),
-                          Text('${_apiKeys.length} key${_apiKeys.length == 1 ? '' : 's'}',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: colorScheme.onSurfaceVariant)),
+                          Text(
+                            '${_apiKeys.length} key${_apiKeys.length == 1 ? '' : 's'}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 4),
                       Text(
                         'Add multiple keys to rotate (500 req/month each). Keys are used round-robin.',
                         style: TextStyle(
-                            fontSize: 12, color: colorScheme.onSurfaceVariant),
+                          fontSize: 12,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       const SizedBox(height: 14),
                       // Existing keys list
                       if (_apiKeys.isNotEmpty) ...[
-                        ..._apiKeys.asMap().entries.map((e) => Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 22,
-                                    height: 22,
-                                    decoration: BoxDecoration(
-                                      color: colorScheme.primaryContainer,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: Text('${e.key + 1}',
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.bold,
-                                            color: colorScheme.onPrimaryContainer)),
+                        ..._apiKeys.asMap().entries.map(
+                          (e) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 22,
+                                  height: 22,
+                                  decoration: BoxDecoration(
+                                    color: colorScheme.primaryContainer,
+                                    borderRadius: BorderRadius.circular(6),
                                   ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      _obscureKey(e.value),
-                                      style: const TextStyle(
-                                          fontFamily: 'monospace',
-                                          fontSize: 12),
+                                  alignment: Alignment.center,
+                                  child: Text(
+                                    '${e.key + 1}',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: colorScheme.onPrimaryContainer,
                                     ),
                                   ),
-                                  IconButton(
-                                    icon: const Icon(Icons.delete_outline,
-                                        size: 18),
-                                    color: colorScheme.error,
-                                    onPressed: () => _removeKey(e.value),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _obscureKey(e.value),
+                                    style: const TextStyle(
+                                      fontFamily: 'monospace',
+                                      fontSize: 12,
+                                    ),
                                   ),
-                                ],
-                              ),
-                            )),
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 18,
+                                  ),
+                                  color: colorScheme.error,
+                                  onPressed: () => _removeKey(e.value),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                         const Divider(height: 20),
                       ],
                       // Add new key
@@ -686,17 +906,23 @@ class _ImportTabState extends State<ImportTab> {
                               decoration: InputDecoration(
                                 hintText: 'sk-live-...',
                                 border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(10)),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
                                 contentPadding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 10),
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
                                 isDense: true,
                                 suffixIcon: IconButton(
-                                  icon: Icon(_newKeyObscured
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
-                                      size: 18),
+                                  icon: Icon(
+                                    _newKeyObscured
+                                        ? Icons.visibility_outlined
+                                        : Icons.visibility_off_outlined,
+                                    size: 18,
+                                  ),
                                   onPressed: () => setState(
-                                      () => _newKeyObscured = !_newKeyObscured),
+                                    () => _newKeyObscured = !_newKeyObscured,
+                                  ),
                                 ),
                               ),
                             ),
@@ -705,9 +931,202 @@ class _ImportTabState extends State<ImportTab> {
                           FilledButton(
                             onPressed: _addKey,
                             style: FilledButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 16, vertical: 12)),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                            ),
                             child: const Text('Add'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // ── Daily Summary Notification ──────────────────────────────────
+              Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(color: colorScheme.outlineVariant),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.notifications_active_outlined,
+                            color: colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Daily Summary Notification',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Receive a Workmanager-based alert with mutual fund and stock moves at your preferred time.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.schedule_outlined,
+                            color: colorScheme.primary,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _reminderTime == null
+                                      ? 'Loading schedule…'
+                                      : 'Scheduled for ${_reminderTime!.format(context)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Updates run once a day and post a notification with the movement breakdown.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: colorScheme.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          FilledButton(
+                            onPressed: _reminderLoading
+                                ? null
+                                : _pickReminderTime,
+                            child: _reminderLoading
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text('Set Time'),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton(
+                            onPressed: _testSummaryRunning
+                                ? null
+                                : _sendSummaryNow,
+                            child: _testSummaryRunning
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text('Send Test'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // ── Battery Optimisation ───────────────────────────────────
+              Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                  side: BorderSide(color: colorScheme.outlineVariant),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.battery_saver, color: colorScheme.primary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Battery Optimisation',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Disable Android’s battery optimisation for Folio so daily refreshes run even when the phone is sleeping.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Icon(
+                            _batteryOptDisabled == true
+                                ? Icons.verified_outlined
+                                : Icons.warning_amber_outlined,
+                            color: _batteryOptDisabled == true
+                                ? Colors.green.shade500
+                                : Colors.orange.shade600,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              _batteryOptDisabled == true
+                                  ? 'Already allowed – tasks can run freely'
+                                  : 'Recommended: allow Folio to bypass optimisation',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          FilledButton.tonal(
+                            onPressed:
+                                _batteryOptDisabled == true || _batteryLoading
+                                ? null
+                                : _requestBatteryOptimization,
+                            child: _batteryLoading
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Text(
+                                    _batteryOptDisabled == true
+                                        ? 'Allowed'
+                                        : 'Allow',
+                                  ),
                           ),
                         ],
                       ),
@@ -746,34 +1165,37 @@ class _ImportTabState extends State<ImportTab> {
                 elevation: 0,
                 color: colorScheme.surfaceContainerHighest,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Stock file format',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold)),
+                      Text(
+                        'Stock file format',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
                       const SizedBox(height: 12),
                       Text(
                         'The Excel file should have columns for:',
                         style: TextStyle(color: colorScheme.onSurfaceVariant),
                       ),
                       const SizedBox(height: 6),
-                      const _Bullet(
-                          text: 'Instrument / Stock / Company Name'),
+                      const _Bullet(text: 'Instrument / Stock / Company Name'),
                       const _Bullet(text: 'Quantity / Qty'),
                       const _Bullet(
-                          text: 'Avg Cost / Average Price / Buy Price'),
+                        text: 'Avg Cost / Average Price / Buy Price',
+                      ),
                       const _Bullet(text: 'ISIN (optional)'),
                       const SizedBox(height: 8),
                       Text(
                         'Compatible with Zerodha Console, Groww, CDSL/NSDL reports.',
                         style: TextStyle(
-                            fontSize: 12, color: colorScheme.onSurfaceVariant),
+                          fontSize: 12,
+                          color: colorScheme.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -822,17 +1244,22 @@ class _ImportCard extends StatelessWidget {
               children: [
                 Icon(icon, color: colorScheme.primary),
                 const SizedBox(width: 8),
-                Text(title,
-                    style: Theme.of(context)
-                        .textTheme
-                        .titleMedium
-                        ?.copyWith(fontWeight: FontWeight.bold)),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 6),
-            Text(description,
-                style: TextStyle(
-                    fontSize: 12, color: colorScheme.onSurfaceVariant)),
+            Text(
+              description,
+              style: TextStyle(
+                fontSize: 12,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
@@ -843,7 +1270,9 @@ class _ImportCard extends StatelessWidget {
                         width: 18,
                         height: 18,
                         child: CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white),
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : const Icon(Icons.upload_file),
                 label: Text(isLoading ? 'Importing…' : buttonLabel),
@@ -896,32 +1325,46 @@ class _BreakdownCard extends StatelessWidget {
                 Icon(icon, size: 16, color: colorScheme.primary),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: Text(label,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w600, fontSize: 12),
-                      overflow: TextOverflow.ellipsis),
+                  child: Text(
+                    label,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 12,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                Text('$count',
-                    style: TextStyle(
-                        fontSize: 11, color: colorScheme.onSurfaceVariant)),
+                Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 10),
-            Text(fmt.format(current),
-                style:
-                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            Text(
+              fmt.format(current),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
             const SizedBox(height: 2),
             Text(
               '${isProfit ? '+' : ''}${pct.toStringAsFixed(1)}%',
               style: TextStyle(
-                  color: pnlColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600),
+                color: pnlColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 4),
-            Text('Invested: ${fmt.format(invested)}',
-                style: TextStyle(
-                    fontSize: 10, color: colorScheme.onSurfaceVariant)),
+            Text(
+              'Invested: ${fmt.format(invested)}',
+              style: TextStyle(
+                fontSize: 10,
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
           ],
         ),
       ),
@@ -956,13 +1399,20 @@ class _SummaryTile extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label,
-                    style: TextStyle(
-                        fontSize: 12,
-                        color: colorScheme.onSurfaceVariant)),
-                Text(value,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 14)),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
               ],
             ),
           ],
@@ -982,10 +1432,9 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 12),
       child: Text(
         title,
-        style: Theme.of(context)
-            .textTheme
-            .titleMedium
-            ?.copyWith(fontWeight: FontWeight.bold),
+        style: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
       ),
     );
   }
@@ -1016,8 +1465,7 @@ class _HoldingTile extends StatelessWidget {
           children: [
             Text(
               holding.schemeName,
-              style:
-                  const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1025,12 +1473,14 @@ class _HoldingTile extends StatelessWidget {
             Row(
               children: [
                 _MiniStat(
-                    label: 'Invested',
-                    value: fmt.format(holding.investedValue)),
+                  label: 'Invested',
+                  value: fmt.format(holding.investedValue),
+                ),
                 const SizedBox(width: 16),
                 _MiniStat(
-                    label: 'Current',
-                    value: fmt.format(holding.currentValue)),
+                  label: 'Current',
+                  value: fmt.format(holding.currentValue),
+                ),
                 const Spacer(),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -1038,9 +1488,10 @@ class _HoldingTile extends StatelessWidget {
                     Text(
                       '${isProfit ? '+' : ''}${fmt.format(holding.profitLoss)}',
                       style: TextStyle(
-                          color: pnlColor,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 13),
+                        color: pnlColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 13,
+                      ),
                     ),
                     Text(
                       '${holding.profitLossPercentage.toStringAsFixed(2)}%',
@@ -1067,13 +1518,17 @@ class _MiniStat extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: TextStyle(
-                fontSize: 11,
-                color: Theme.of(context).colorScheme.onSurfaceVariant)),
-        Text(value,
-            style:
-                const TextStyle(fontWeight: FontWeight.w600, fontSize: 12)),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(
+          value,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+        ),
       ],
     );
   }
@@ -1082,10 +1537,7 @@ class _MiniStat extends StatelessWidget {
 class _EmptyState extends StatelessWidget {
   final String message;
   final IconData icon;
-  const _EmptyState({
-    required this.message,
-    this.icon = Icons.inbox_outlined,
-  });
+  const _EmptyState({required this.message, this.icon = Icons.inbox_outlined});
 
   @override
   Widget build(BuildContext context) {
@@ -1095,15 +1547,18 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon,
-                size: 64,
-                color: Theme.of(context).colorScheme.outlineVariant),
+            Icon(
+              icon,
+              size: 64,
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
             const SizedBox(height: 16),
             Text(
               message,
               textAlign: TextAlign.center,
               style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -1117,7 +1572,9 @@ class _StockTile extends StatelessWidget {
   const _StockTile({required this.stock});
 
   void _showEditDialog(BuildContext context) {
-    final controller = TextEditingController(text: stock.apiName ?? stock.companyName);
+    final controller = TextEditingController(
+      text: stock.apiName ?? stock.companyName,
+    );
     bool loading = false;
 
     showDialog(
@@ -1138,8 +1595,9 @@ class _StockTile extends StatelessWidget {
               Text(
                 'Enter the name as the API recognises it.\nE.g. "Hdfc Silver", "Rail Vikas Nigam"',
                 style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(ctx).colorScheme.onSurfaceVariant),
+                  fontSize: 12,
+                  color: Theme.of(ctx).colorScheme.onSurfaceVariant,
+                ),
               ),
               const SizedBox(height: 14),
               TextField(
@@ -1148,7 +1606,8 @@ class _StockTile extends StatelessWidget {
                 decoration: InputDecoration(
                   labelText: 'API search name',
                   border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                   isDense: true,
                 ),
               ),
@@ -1173,15 +1632,21 @@ class _StockTile extends StatelessWidget {
                       setDialogState(() => loading = true);
                       final provider = context.read<PortfolioProvider>();
                       final found = await provider.updateStockApiName(
-                          stock.id!, name);
+                        stock.id!,
+                        name,
+                      );
                       if (ctx.mounted) {
                         Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text(found
-                              ? 'Price updated for "$name"'
-                              : 'No price found for "$name" — name saved, try again later'),
-                          behavior: SnackBarBehavior.floating,
-                        ));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              found
+                                  ? 'Price updated for "$name"'
+                                  : 'No price found for "$name" — name saved, try again later',
+                            ),
+                            behavior: SnackBarBehavior.floating,
+                          ),
+                        );
                       }
                     },
               child: const Text('Fetch Price'),
@@ -1218,7 +1683,9 @@ class _StockTile extends StatelessWidget {
                   child: Text(
                     stock.companyName,
                     style: const TextStyle(
-                        fontWeight: FontWeight.w600, fontSize: 13),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -1226,22 +1693,26 @@ class _StockTile extends StatelessWidget {
                 if (stock.percentChange != null)
                   Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 8, vertical: 3),
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
-                      color: (stock.percentChange! >= 0
-                              ? Colors.green
-                              : Colors.red)
-                          .withOpacity(0.12),
+                      color:
+                          (stock.percentChange! >= 0
+                                  ? Colors.green
+                                  : Colors.red)
+                              .withOpacity(0.12),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
                       '${stock.percentChange! >= 0 ? '+' : ''}${stock.percentChange!.toStringAsFixed(2)}%',
                       style: TextStyle(
-                          fontSize: 11,
-                          color: stock.percentChange! >= 0
-                              ? Colors.green.shade400
-                              : Colors.red.shade400,
-                          fontWeight: FontWeight.bold),
+                        fontSize: 11,
+                        color: stock.percentChange! >= 0
+                            ? Colors.green.shade400
+                            : Colors.red.shade400,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                 // Edit button — always visible, highlighted in amber when no price
@@ -1266,16 +1737,19 @@ class _StockTile extends StatelessWidget {
             Row(
               children: [
                 _MiniStat(
-                    label: 'Qty',
-                    value: stock.quantity.toStringAsFixed(
-                        stock.quantity % 1 == 0 ? 0 : 2)),
+                  label: 'Qty',
+                  value: stock.quantity.toStringAsFixed(
+                    stock.quantity % 1 == 0 ? 0 : 2,
+                  ),
+                ),
                 const SizedBox(width: 16),
                 _MiniStat(label: 'Avg', value: fmt.format(stock.avgBuyPrice)),
                 const SizedBox(width: 16),
                 if (hasPrice)
                   _MiniStat(
-                      label: 'LTP',
-                      value: fmt.format(stock.currentPrice)),
+                    label: 'LTP',
+                    value: fmt.format(stock.currentPrice),
+                  ),
                 const Spacer(),
                 if (hasPrice)
                   Column(
@@ -1284,9 +1758,10 @@ class _StockTile extends StatelessWidget {
                       Text(
                         '${isProfit ? '+' : ''}${fmt.format(stock.profitLoss)}',
                         style: TextStyle(
-                            color: pnlColor,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13),
+                          color: pnlColor,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
                       Text(
                         '${stock.profitLossPercentage.toStringAsFixed(2)}%',
@@ -1300,9 +1775,10 @@ class _StockTile extends StatelessWidget {
                     child: Text(
                       'Price unavailable — fix',
                       style: TextStyle(
-                          fontSize: 11,
-                          color: Colors.amber.shade600,
-                          decoration: TextDecoration.underline),
+                        fontSize: 11,
+                        color: Colors.amber.shade600,
+                        decoration: TextDecoration.underline,
+                      ),
                     ),
                   ),
               ],
@@ -1313,8 +1789,9 @@ class _StockTile extends StatelessWidget {
                 child: Text(
                   'Updated: ${_formatDate(stock.lastUpdated!)}',
                   style: TextStyle(
-                      fontSize: 10,
-                      color: colorScheme.onSurfaceVariant.withAlpha(150)),
+                    fontSize: 10,
+                    color: colorScheme.onSurfaceVariant.withAlpha(150),
+                  ),
                 ),
               ),
           ],
@@ -1343,18 +1820,21 @@ class _Bullet extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('• ',
-              style:
-                  TextStyle(color: Theme.of(context).colorScheme.primary)),
+          Text(
+            '• ',
+            style: TextStyle(color: Theme.of(context).colorScheme.primary),
+          ),
           Expanded(
-            child: Text(text,
-                style: TextStyle(
-                    fontSize: 13,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 }
-

@@ -614,7 +614,6 @@ class _ImportTabState extends State<ImportTab> {
   bool _reminderLoading = false;
   bool? _batteryOptDisabled;
   bool _batteryLoading = false;
-  bool _testSummaryRunning = false;
 
   @override
   void initState() {
@@ -706,32 +705,6 @@ class _ImportTabState extends State<ImportTab> {
     }
   }
 
-  Future<void> _sendSummaryNow() async {
-    setState(() => _testSummaryRunning = true);
-    try {
-      await BackgroundService().runSummaryNow();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Triggered a portfolio summary notification'),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Failed to trigger summary. Check permissions and holdings.',
-            ),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _testSummaryRunning = false);
-    }
-  }
 
   String _obscureKey(String key) {
     if (key.length <= 12) return '••••••••';
@@ -1028,21 +1001,6 @@ class _ImportTabState extends State<ImportTab> {
                                     ),
                                   )
                                 : const Text('Set Time'),
-                          ),
-                          const SizedBox(width: 8),
-                          OutlinedButton(
-                            onPressed: _testSummaryRunning
-                                ? null
-                                : _sendSummaryNow,
-                            child: _testSummaryRunning
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Text('Send Test'),
                           ),
                         ],
                       ),

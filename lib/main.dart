@@ -27,15 +27,27 @@ class MyApp extends StatelessWidget {
       title: 'Folio',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        brightness: Brightness.light,
-        primarySwatch: Colors.blueGrey,
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(
         brightness: Brightness.dark,
-        primarySwatch: Colors.blueGrey,
+        colorScheme: const ColorScheme.dark(
+          background: Colors.black,
+          surface: Color(0xFF111111),
+          primary: Colors.white,
+          onPrimary: Colors.black,
+          secondary: Color(0xFF1E1E1E),
+          onSecondary: Colors.white,
+          surfaceVariant: Color(0xFF1A1A1A),
+          onSurfaceVariant: Color(0xFFAAAAAA),
+          primaryContainer: Color(0xFF1E1E1E),
+          onPrimaryContainer: Colors.white,
+          secondaryContainer: Color(0xFF1A1A1A),
+          onSecondaryContainer: Color(0xFFCCCCCC),
+          outline: Color(0xFF2A2A2A),
+          outlineVariant: Color(0xFF222222),
+        ),
+        scaffoldBackgroundColor: Colors.black,
         useMaterial3: true,
       ),
+      themeMode: ThemeMode.dark,
       home: const DashboardScreen(),
     );
   }

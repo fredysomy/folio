@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart' as sqflite_ffi;
 import '../models/holding.dart';
 import '../models/stock_holding.dart';
 
@@ -21,14 +21,14 @@ class DatabaseService {
 
   Future<Database> _initDatabase() async {
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-      sqfliteFfiInit();
-      databaseFactory = databaseFactoryFfi;
+      sqflite_ffi.sqfliteFfiInit();
+      databaseFactory = sqflite_ffi.databaseFactoryFfi;
     }
 
     String path = join(await getDatabasesPath(), 'portfolio.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 4,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -60,6 +60,17 @@ class DatabaseService {
         lastUpdated TEXT
       )
     ''');
+    await db.execute('''
+      CREATE TABLE net_worth_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        date TEXT NOT NULL,
+        totalValue REAL NOT NULL,
+        dayChange REAL,
+        type TEXT,
+        mfValue REAL,
+        stockValue REAL
+      )
+    ''');
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -78,38 +89,36 @@ class DatabaseService {
         )
       ''');
     }
-  }
-
-  Future<int> insertHolding(Holding holding) async {
-    final db = await database;
-    return await db.insert(
-      'holdings',
-      holding.toMap(),
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    if (oldVersion < 3) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS net_worth_history (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date TEXT NOT NULL,
+          totalValue REAL NOT NULL,
+          dayChange REAL,
+          type TEXT,
+          mfValue REAL,
+          stockValue REAL
+        )
+      ''');
+    }
+    if (oldVersion < 4) {
+      await db.execute(
+        'ALTER TABLE net_worth_history ADD COLUMN mfValue REAL;',
+      );
+      await db.execute(
+        'ALTER TABLE net_worth_history ADD COLUMN stockValue REAL;',
+      );
+    }
   }
 
   Future<List<Holding>> getHoldings() async {
     final db = await database;
-    final List<Map<String, dynamic>> maps = await db.query('holdings');
-    return List.generate(maps.length, (i) {
-      return Holding.fromMap(maps[i]);
-    });
-  }
-
-  Future<int> updateHolding(Holding holding) async {
-    final db = await database;
-    return await db.update(
+    final maps = await db.query(
       'holdings',
-      holding.toMap(),
-      where: 'id = ?',
-      whereArgs: [holding.id],
+      orderBy: 'schemeName COLLATE NOCASE',
     );
-  }
-
-  Future<int> deleteHolding(int id) async {
-    final db = await database;
-    return await db.delete('holdings', where: 'id = ?', whereArgs: [id]);
+    return maps.map((m) => Holding.fromMap(m)).toList();
   }
 
   Future<void> clearHoldings() async {
@@ -117,28 +126,73 @@ class DatabaseService {
     await db.delete('holdings');
   }
 
-  // ── Stock Holdings ──────────────────────────────────────────────────────────
-
-  Future<int> insertStockHolding(StockHolding h) async {
+  Future<int> insertHolding(Holding holding) async {
     final db = await database;
-    return await db.insert('stock_holdings', h.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace);
+    final map = Map<String, dynamic>.from(holding.toMap())..remove('id');
+    return await db.insert('holdings', map);
+  }
+
+  Future<int> updateHolding(Holding holding) async {
+    if (holding.id == null) {
+      throw ArgumentError('Cannot update holding without an id');
+    }
+    final db = await database;
+    final map = Map<String, dynamic>.from(holding.toMap())..remove('id');
+    return await db.update(
+      'holdings',
+      map,
+      where: 'id = ?',
+      whereArgs: [holding.id],
+    );
   }
 
   Future<List<StockHolding>> getStockHoldings() async {
     final db = await database;
-    final maps = await db.query('stock_holdings');
+    final maps = await db.query(
+      'stock_holdings',
+      orderBy: 'companyName COLLATE NOCASE',
+    );
     return maps.map((m) => StockHolding.fromMap(m)).toList();
-  }
-
-  Future<int> updateStockHolding(StockHolding h) async {
-    final db = await database;
-    return await db.update('stock_holdings', h.toMap(),
-        where: 'id = ?', whereArgs: [h.id]);
   }
 
   Future<void> clearStockHoldings() async {
     final db = await database;
     await db.delete('stock_holdings');
+  }
+
+  Future<int> insertStockHolding(StockHolding holding) async {
+    final db = await database;
+    final map = Map<String, dynamic>.from(holding.toMap())..remove('id');
+    return await db.insert('stock_holdings', map);
+  }
+
+  Future<int> updateStockHolding(StockHolding holding) async {
+    if (holding.id == null) {
+      throw ArgumentError('Cannot update stock holding without an id');
+    }
+    final db = await database;
+    final map = Map<String, dynamic>.from(holding.toMap())..remove('id');
+    return await db.update(
+      'stock_holdings',
+      map,
+      where: 'id = ?',
+      whereArgs: [holding.id],
+    );
+  }
+
+  Future<int> insertNetWorthRecord(Map<String, dynamic> record) async {
+    final db = await database;
+    return await db.insert('net_worth_history', record);
+  }
+
+  Future<Map<String, dynamic>?> getLastNetWorthRecord() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'net_worth_history',
+      orderBy: 'date DESC',
+      limit: 1,
+    );
+    if (maps.isNotEmpty) return maps.first;
+    return null;
   }
 }
